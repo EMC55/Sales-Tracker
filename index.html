@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Field Sales Tracker</title>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body>
+
+<section id="app">
+  <!-- HEADER -->
+  <header class="topbar">
+    <div class="brand"><i data-lucide="route"></i><span>Field Sales Tracker</span></div>
+    <select id="spSelect" class="sp-select"></select>
+    <button id="settingsBtn" class="mini-btn settings-btn" type="button"><i data-lucide="settings"></i></button>
+  </header>
+
+  <div id="settingsModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="card-head">Sync settings</div>
+      <p class="hint">Paste your Google Apps Script Web App URL so entries sync to a shared Google Sheet everyone (including your manager) can see. Same URL on every salesperson's phone.</p>
+      <label class="field">
+        <span>Apps Script Web App URL</span>
+        <input type="text" id="endpointInput" placeholder="https://script.google.com/macros/s/.../exec">
+      </label>
+      <div class="form-actions">
+        <button type="button" class="btn ghost" id="settingsClose">Close</button>
+        <button type="button" class="btn primary" id="settingsSave">Save</button>
+      </div>
+      <p id="syncStatus" class="hint"></p>
+    </div>
+  </div>
+
+  <!-- CHECK-IN TAB -->
+  <section id="tab-checkin" class="tab active">
+    <div class="progress-row">
+      <div class="progress-card">
+        <div class="progress-head"><span>Visits today</span><span id="visitCountLabel">0/3</span></div>
+        <div class="bar-track"><div id="visitBar" class="bar-fill"></div></div>
+      </div>
+      <div class="progress-card">
+        <div class="progress-head"><span>New customers this month</span><span id="newCustLabel">0/5</span></div>
+        <div class="bar-track"><div id="newCustBar" class="bar-fill alt"></div></div>
+      </div>
+    </div>
+
+    <h2 class="section-title">Log an activity</h2>
+    <div class="type-grid">
+      <button class="type-btn" data-type="Visit"><i data-lucide="footprints"></i><span>Visit</span></button>
+      <button class="type-btn" data-type="WhatsApp"><i data-lucide="message-circle"></i><span>WhatsApp</span></button>
+      <button class="type-btn" data-type="Call"><i data-lucide="phone-call"></i><span>Daily Call</span></button>
+    </div>
+
+    <form id="checkinForm" class="card hidden">
+      <div class="card-head" id="checkinFormTitle">Visit</div>
+      <label class="field">
+        <span>Customer name</span>
+        <input type="text" id="ciCustomer" placeholder="e.g. AKR CONTRACTS SDN BHD" required>
+      </label>
+      <label class="checkbox-row">
+        <input type="checkbox" id="ciNewCustomer">
+        <span>This is a new customer</span>
+      </label>
+      <label class="field">
+        <span id="photoLabel">Take a photo (required)</span>
+        <input type="file" id="ciPhoto" accept="image/*" capture="environment">
+      </label>
+      <div id="photoPreviewWrap" class="preview-wrap hidden"><img id="photoPreview" class="preview-img"></div>
+      <div class="loc-row">
+        <i data-lucide="map-pin"></i>
+        <span id="ciLocText">Location not captured</span>
+        <button type="button" id="ciGetLoc" class="mini-btn">Capture</button>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn ghost" id="ciCancel">Cancel</button>
+        <button type="submit" class="btn primary">Submit</button>
+      </div>
+    </form>
+
+    <h2 class="section-title">Today's log</h2>
+    <div id="checkinList" class="entry-list"><p class="empty">No activity logged yet today.</p></div>
+  </section>
+
+  <!-- QUOTATION TAB -->
+  <section id="tab-quote" class="tab">
+    <h2 class="section-title">Quotation</h2>
+    <form id="quoteForm" class="card">
+      <label class="field">
+        <span>Customer name</span>
+        <input type="text" id="qCustomer" placeholder="Customer name" required>
+      </label>
+      <div class="toggle-row">
+        <button type="button" class="toggle-btn active" data-qtype="screenshot">Screenshot</button>
+        <button type="button" class="toggle-btn" data-qtype="document">Upload document</button>
+      </div>
+      <label class="field" id="qFileLabelWrap">
+        <span id="qFileLabel">Screenshot of quote</span>
+        <input type="file" id="qFile" accept="image/*">
+      </label>
+      <div id="qPreviewWrap" class="preview-wrap hidden"><img id="qPreview" class="preview-img"></div>
+      <div id="qDocName" class="doc-chip hidden"><i data-lucide="file-text"></i><span></span></div>
+      <button type="submit" class="btn primary full">Submit quotation</button>
+    </form>
+    <h2 class="section-title">Submitted quotations</h2>
+    <div id="quoteList" class="entry-list"><p class="empty">No quotations submitted yet.</p></div>
+  </section>
+
+  <!-- ORDER TAB -->
+  <section id="tab-order" class="tab">
+    <h2 class="section-title">Place order</h2>
+    <form id="orderForm" class="card">
+      <label class="field">
+        <span>Customer name</span>
+        <input type="text" id="oCustomer" placeholder="Customer name" required>
+      </label>
+      <span class="field-label">Item class (select all that apply)</span>
+      <div id="itemClassGrid" class="chip-grid"></div>
+      <label class="field">
+        <span>Order notes / quantity</span>
+        <textarea id="oNotes" rows="3" placeholder="e.g. 200 bags OPC cement, deliver by Friday"></textarea>
+      </label>
+      <button type="submit" class="btn primary full">Submit order</button>
+    </form>
+    <h2 class="section-title">Recent orders</h2>
+    <div id="orderList" class="entry-list"><p class="empty">No orders placed yet.</p></div>
+  </section>
+
+  <!-- TRAIL TAB -->
+  <section id="tab-trail" class="tab">
+    <h2 class="section-title">Today's trail</h2>
+    <p class="hint">Track where you've been today, like a Strava trail for customer visits.</p>
+    <div class="trail-controls">
+      <button id="trailToggle" class="btn primary full"><i data-lucide="play"></i><span>Start tracking</span></button>
+    </div>
+    <div class="trail-map card">
+      <svg id="trailSvg" viewBox="0 0 300 220" class="trail-svg"></svg>
+      <p id="trailEmpty" class="empty">No points captured yet. Start tracking, then log check-ins to drop pins.</p>
+    </div>
+    <div id="trailList" class="entry-list"></div>
+  </section>
+
+  <!-- DASHBOARD TAB -->
+  <section id="tab-dashboard" class="tab">
+    <h2 class="section-title">Credit utilization by salesperson</h2>
+    <p class="hint">Core customers must reach <b>&ge;10%</b> utilization &middot; Non-core customers must reach <b>&ge;30%</b> utilization.</p>
+
+    <div class="card chart-card">
+      <div class="chart-head"><span class="dot core"></span><span>Core customers &middot; target 10%</span></div>
+      <svg id="coreChart" viewBox="0 0 320 190" class="chart-svg"></svg>
+    </div>
+
+    <div class="card chart-card">
+      <div class="chart-head"><span class="dot noncore"></span><span>Non-core customers &middot; target 30%</span></div>
+      <svg id="noncoreChart" viewBox="0 0 320 190" class="chart-svg"></svg>
+    </div>
+
+    <div class="legend-row">
+      <span><i class="sw meet"></i>Meets target</span>
+      <span><i class="sw miss"></i>Below target</span>
+    </div>
+
+    <h2 class="section-title">Team activity today <button id="refreshTeam" type="button" class="mini-btn">Refresh</button></h2>
+    <p id="teamHint" class="hint">Set up sync (gear icon, top right) to see every salesperson's activity here.</p>
+    <div id="teamActivity" class="entry-list"></div>
+  </section>
+
+  <!-- BOTTOM NAV -->
+  <nav class="bottomnav">
+    <button class="navbtn active" data-tab="tab-checkin"><i data-lucide="check-circle"></i><span>Check-in</span></button>
+    <button class="navbtn" data-tab="tab-quote"><i data-lucide="file-text"></i><span>Quote</span></button>
+    <button class="navbtn" data-tab="tab-order"><i data-lucide="shopping-cart"></i><span>Order</span></button>
+    <button class="navbtn" data-tab="tab-trail"><i data-lucide="map"></i><span>Trail</span></button>
+    <button class="navbtn" data-tab="tab-dashboard"><i data-lucide="bar-chart-3"></i><span>Dashboard</span></button>
+  </nav>
+</section>
+
+<style>
+:root{
+  --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f8fafc; --card:#ffffff;
+  --brand:#2563eb; --brand-ink:#1d4ed8; --brand-soft:#eff6ff;
+  --green:#16a34a; --green-soft:#f0fdf4;
+  --red:#dc2626; --red-soft:#fef2f2;
+  --amber:#d97706;
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --ink:#f1f5f9; --muted:#94a3b8; --line:#1e293b; --bg:#0b1120; --card:#111827;
+    --brand-soft:#0c1e3d; --green-soft:#052e17; --red-soft:#3b0d0d;
+  }
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);}
+#app{max-width:480px;margin:0 auto;min-height:100vh;padding-bottom:78px;position:relative;}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;}
+.brand i{width:20px;height:20px;color:var(--brand);}
+.sp-select{border:1px solid var(--line);border-radius:10px;padding:7px 10px;font-size:13px;background:var(--bg);color:var(--ink);font-weight:600;}
+
+.tab{display:none;padding:16px;animation:fade .25s ease;}
+.tab.active{display:block;}
+@keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+.section-title{font-size:14px;font-weight:700;margin:22px 0 10px;color:var(--ink);}
+.hint{font-size:12.5px;color:var(--muted);margin:4px 0 14px;line-height:1.5;}
+
+.progress-row{display:flex;flex-direction:column;gap:10px;}
+.progress-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;}
+.progress-head{display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;margin-bottom:8px;color:var(--muted);}
+.bar-track{height:8px;border-radius:6px;background:var(--line);overflow:hidden;}
+.bar-fill{height:100%;width:0%;background:var(--brand);border-radius:6px;transition:width .4s ease;}
+.bar-fill.alt{background:var(--amber);}
+
+.type-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.type-btn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 6px;border-radius:var(--radius);border:1.5px solid var(--line);background:var(--card);color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer;}
+.type-btn i{width:22px;height:22px;color:var(--brand);}
+.type-btn:active,.type-btn.selected{border-color:var(--brand);background:var(--brand-soft);}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-top:14px;}
+.card-head{font-weight:700;font-size:14px;margin-bottom:12px;}
+.hidden{display:none !important;}
+
+.field{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:14px;}
+.field-label{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:8px;}
+.field input[type=text],.field input[type=file],.field textarea{border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;color:var(--ink);background:var(--bg);font-weight:400;font-family:inherit;}
+.field textarea{resize:vertical;}
+.checkbox-row{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;margin-bottom:14px;}
+.checkbox-row input{width:16px;height:16px;}
+
+.preview-wrap{margin-bottom:14px;}
+.preview-img{width:100%;max-height:180px;object-fit:cover;border-radius:10px;border:1px solid var(--line);}
+
+.doc-chip{display:flex;align-items:center;gap:8px;background:var(--brand-soft);color:var(--brand-ink);padding:8px 12px;border-radius:10px;font-size:12.5px;font-weight:600;margin-bottom:14px;}
+.doc-chip i{width:16px;height:16px;}
+
+.loc-row{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);margin-bottom:16px;}
+.loc-row i{width:16px;height:16px;color:var(--brand);}
+.loc-row span{flex:1;}
+.mini-btn{border:1px solid var(--line);background:var(--card);color:var(--brand-ink);font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:8px;cursor:pointer;}
+
+.form-actions{display:flex;gap:10px;}
+.btn{border:none;border-radius:10px;padding:12px 16px;font-size:13.5px;font-weight:700;cursor:pointer;}
+.btn.primary{background:var(--brand);color:#fff;flex:1;display:flex;align-items:center;justify-content:center;gap:6px;}
+.btn.primary i{width:16px;height:16px;}
+.btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);}
+.btn.full{width:100%;}
+
+.entry-list{display:flex;flex-direction:column;gap:10px;}
+.empty{font-size:12.5px;color:var(--muted);text-align:center;padding:18px 0;}
+.entry{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;gap:12px;align-items:flex-start;}
+.entry-thumb{width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;background:var(--line);}
+.entry-icon{width:44px;height:44px;border-radius:8px;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.entry-icon i{width:20px;height:20px;color:var(--brand);}
+.entry-body{flex:1;min-width:0;}
+.entry-top{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;font-weight:700;}
+.entry-tag{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--brand-soft);color:var(--brand-ink);white-space:nowrap;}
+.entry-tag.new{background:var(--green-soft);color:var(--green);}
+.entry-meta{font-size:11.5px;color:var(--muted);margin-top:3px;}
+.entry-notes{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4;}
+.entry-classes{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
+.mini-chip{font-size:10px;font-weight:700;background:var(--bg);border:1px solid var(--line);color:var(--muted);padding:2px 7px;border-radius:6px;}
+
+.toggle-row{display:flex;gap:8px;margin-bottom:14px;}
+.toggle-btn{flex:1;border:1.5px solid var(--line);background:var(--card);color:var(--muted);font-size:12.5px;font-weight:700;padding:9px 6px;border-radius:10px;cursor:pointer;}
+.toggle-btn.active{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-ink);}
+
+.chip-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
+.class-chip{border:1.5px solid var(--line);background:var(--bg);color:var(--ink);font-size:11.5px;font-weight:600;padding:8px 11px;border-radius:20px;cursor:pointer;}
+.class-chip.selected{border-color:var(--brand);background:var(--brand);color:#fff;}
+
+.trail-controls{margin-bottom:14px;}
+.trail-map{padding:12px;}
+.trail-svg{width:100%;height:auto;background:var(--bg);border-radius:10px;}
+#trailEmpty{margin:0;padding:10px 0 2px;}
+
+.chart-card{padding:14px 12px 10px;}
+.chart-head{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;margin-bottom:6px;padding:0 4px;}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+.dot.core{background:var(--brand);}
+.dot.noncore{background:var(--amber);}
+.chart-svg{width:100%;height:auto;}
+.legend-row{display:flex;gap:18px;justify-content:center;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;}
+.legend-row span{display:flex;align-items:center;gap:6px;}
+.sw{width:10px;height:10px;border-radius:3px;display:inline-block;}
+.sw.meet{background:var(--green);}
+.sw.miss{background:var(--red);}
+
+.bottomnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:var(--card);border-top:1px solid var(--line);display:flex;z-index:30;padding:6px 4px calc(6px + env(safe-area-inset-bottom));}
+.navbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;color:var(--muted);font-size:10px;font-weight:600;padding:6px 2px;cursor:pointer;}
+.navbtn i{width:20px;height:20px;}
+.navbtn.active{color:var(--brand);}
+
+.settings-btn{padding:7px 9px;display:flex;align-items:center;justify-content:center;}
+.settings-btn i{width:15px;height:15px;}
+.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:40;display:flex;align-items:flex-end;justify-content:center;}
+.modal-overlay.hidden{display:none;}
+.modal-card{background:var(--card);width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));}
+.summary-row{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--muted);font-weight:600;}
+.summary-row b{color:var(--ink);}
+</style>
+
+<script>
+(function(){
+  const SALESPERSONS = ["C020","C032","N029","N040","N041","S022","S025"];
+  const ITEM_CLASSES = ["BAG CEMENT","BRC & MESH","BRICK & BLOCK","BULK CEMENT","CLAY & CEMENT ROOFING","CLAY, CEMENT & CONCRETE PRODUCT","DRY MIX & WATERPROOFING SOLUTION","FORSTARKA","GANGSA STEEL","OBM","PLYWOOD & WOOD","PRESS METAL","PRIMA","STEEL BAR & WIRE","TILES & SANITARY WARE"];
+  const CREDIT_DATA = {
+    core:    {C020:17.84, C032:44.95, N029:12.86, N040:0.00, N041:0.00, S022:22.65, S025:30.49},
+    noncore: {C020:14.92, C032:8.23,  N029:10.18, N040:8.30, N041:8.83, S022:3.72,  S025:1.84}
+  };
+  const todayKey = () => new Date().toISOString().slice(0,10);
+  const monthKey = () => new Date().toISOString().slice(0,7);
+
+  function sp(){ return document.getElementById('spSelect').value; }
+  function storeKey(name){ return `fst:${sp()}:${name}`; }
+  function load(name, fallback){ try{ const v = localStorage.getItem(storeKey(name)); return v ? JSON.parse(v) : fallback; }catch(e){ return fallback; } }
+  function save(name, val){ localStorage.setItem(storeKey(name), JSON.stringify(val)); }
+
+  function getEndpoint(){ return localStorage.getItem('fst:endpoint') || ''; }
+  function setEndpoint(v){ localStorage.setItem('fst:endpoint', v); }
+  function syncToSheet(payload){
+    const ep = getEndpoint(); if(!ep) return;
+    fetch(ep, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(Object.assign({sp:sp()}, payload)) }).catch(()=>{});
+  }
+  document.getElementById('settingsBtn').addEventListener('click', ()=>{
+    document.getElementById('endpointInput').value = getEndpoint();
+    document.getElementById('syncStatus').textContent = getEndpoint() ? 'Sync is on.' : 'Sync is off — entries stay on this phone only.';
+    document.getElementById('settingsModal').classList.remove('hidden');
+  });
+  document.getElementById('settingsClose').addEventListener('click', ()=> document.getElementById('settingsModal').classList.add('hidden'));
+  document.getElementById('settingsSave').addEventListener('click', ()=>{
+    setEndpoint(document.getElementById('endpointInput').value.trim());
+    document.getElementById('settingsModal').classList.add('hidden');
+    document.getElementById('teamHint').classList.toggle('hidden', !!getEndpoint());
+    if(getEndpoint()) fetchTeamActivity();
+  });
+  async function fetchTeamActivity(){
+    const ep = getEndpoint(); if(!ep) return;
+    const wrap = document.getElementById('teamActivity');
+    wrap.innerHTML = '<p class="empty">Loading…</p>';
+    try{
+      const res = await fetch(ep + (ep.includes('?')?'&':'?') + 'sheet=Checkins');
+      const rows = await res.json();
+      const today = rows.filter(r => String(r.Timestamp).slice(0,10) === todayKey());
+      const bySp = {};
+      today.forEach(r=>{ const s=r.Salesperson; bySp[s] = bySp[s] || {visits:0, calls:0}; if(r.Type==='Visit') bySp[s].visits++; else bySp[s].calls++; });
+      const keys = Object.keys(bySp);
+      if(keys.length===0){ wrap.innerHTML = '<p class="empty">No synced activity yet today.</p>'; return; }
+      wrap.innerHTML = keys.map(k=>`
+        <div class="entry">
+          <div class="entry-icon"><i data-lucide="user"></i></div>
+          <div class="entry-body">
+            <div class="entry-top"><span>${k}</span><span class="entry-meta">${bySp[k].visits} visits · ${bySp[k].calls} calls/WA</span></div>
+          </div>
+        </div>`).join('');
+      lucide.createIcons();
+    }catch(err){ wrap.innerHTML = '<p class="empty">Could not reach the sheet. Check the URL in settings.</p>'; }
+  }
+  document.getElementById('refreshTeam').addEventListener('click', fetchTeamActivity);
+
+  const spSelect = document.getElementById('spSelect');
+  SALESPERSONS.forEach(s=>{ const o=document.createElement('option'); o.value=s; o.textContent=s; spSelect.appendChild(o); });
+  spSelect.addEventListener('change', renderAll);
+
+  ITEM_CLASSES.forEach(c=>{
+    const chip = document.createElement('button');
+    chip.type='button'; chip.className='class-chip'; chip.textContent=c; chip.dataset.class=c;
+    chip.addEventListener('click', ()=> chip.classList.toggle('selected'));
+    document.getElementById('itemClassGrid').appendChild(chip);
+  });
+
+  document.querySelectorAll('.navbtn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.navbtn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.tab).classList.add('active');
+      if(btn.dataset.tab==='tab-dashboard'){ renderCharts(); if(getEndpoint()) fetchTeamActivity(); }
+      if(btn.dataset.tab==='tab-trail') renderTrail();
+    });
+  });
+
+  let selectedType = null;
+  let photoDataUrl = null;
+  let lastCoords = null;
+
+  document.querySelectorAll('.type-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedType = btn.dataset.type;
+      document.getElementById('checkinFormTitle').textContent = selectedType;
+      document.getElementById('photoLabel').textContent = selectedType==='Visit' ? 'Take a photo (required)' : 'Upload screenshot (required)';
+      document.getElementById('checkinForm').classList.remove('hidden');
+      photoDataUrl = null; lastCoords = null;
+      document.getElementById('photoPreviewWrap').classList.add('hidden');
+      document.getElementById('ciLocText').textContent = 'Location not captured';
+      document.getElementById('ciCustomer').value=''; document.getElementById('ciNewCustomer').checked=false;
+      document.getElementById('checkinForm').scrollIntoView({behavior:'smooth', block:'center'});
+    });
+  });
+  document.getElementById('ciCancel').addEventListener('click', ()=>{
+    document.getElementById('checkinForm').classList.add('hidden');
+    document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('selected'));
+  });
+  document.getElementById('ciPhoto').addEventListener('change', e=>{
+    const f = e.target.files[0]; if(!f) return;
+    const reader = new FileReader();
+    reader.onload = ev=>{ photoDataUrl = ev.target.result; document.getElementById('photoPreview').src = photoDataUrl; document.getElementById('photoPreviewWrap').classList.remove('hidden'); };
+    reader.readAsDataURL(f);
+  });
+  document.getElementById('ciGetLoc').addEventListener('click', ()=>{
+    if(!navigator.geolocation){ document.getElementById('ciLocText').textContent='Geolocation not supported'; return; }
+    document.getElementById('ciLocText').textContent='Capturing…';
+    navigator.geolocation.getCurrentPosition(pos=>{
+      lastCoords = {lat:pos.coords.latitude, lng:pos.coords.longitude};
+      document.getElementById('ciLocText').textContent = `${lastCoords.lat.toFixed(4)}, ${lastCoords.lng.toFixed(4)}`;
+    }, ()=>{ document.getElementById('ciLocText').textContent='Could not get location'; }, {timeout:8000});
+  });
+
+  document.getElementById('checkinForm').addEventListener('submit', e=>{
+    e.preventDefault();
+    if(!photoDataUrl){ alert(selectedType==='Visit' ? 'Please take a photo to confirm this visit.' : 'Please upload a screenshot to confirm this activity.'); return; }
+    const entries = load('checkins', []);
+    const entry = {
+      id: Date.now(), type: selectedType, customer: document.getElementById('ciCustomer').value || '(unnamed customer)',
+      isNew: document.getElementById('ciNewCustomer').checked, photo: photoDataUrl, coords: lastCoords,
+      ts: new Date().toISOString()
+    };
+    entries.unshift(entry); save('checkins', entries);
+    syncToSheet({type:'checkin', ts:entry.ts, customer:entry.customer, subtype:entry.type, isNew:entry.isNew, photo:entry.photo, lat: entry.coords?entry.coords.lat:'', lng: entry.coords?entry.coords.lng:''});
+    document.getElementById('checkinForm').reset();
+    document.getElementById('checkinForm').classList.add('hidden');
+    document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('selected'));
+    renderCheckins(); renderTrail();
+  });
+
+  function renderCheckins(){
+    const all = load('checkins', []);
+    const today = all.filter(e=> e.ts.slice(0,10)===todayKey());
+    const monthNew = load('checkins', []).filter(e=> e.ts.slice(0,7)===monthKey() && e.isNew);
+
+    const visitCount = today.filter(e=>e.type==='Visit').length;
+    document.getElementById('visitCountLabel').textContent = `${visitCount}/3`;
+    document.getElementById('visitBar').style.width = Math.min(100, visitCount/3*100)+'%';
+    document.getElementById('visitBar').style.background = visitCount>=3 ? 'var(--green)' : 'var(--brand)';
+
+    document.getElementById('newCustLabel').textContent = `${monthNew.length}/5`;
+    document.getElementById('newCustBar').style.width = Math.min(100, monthNew.length/5*100)+'%';
+    document.getElementById('newCustBar').style.background = monthNew.length>=5 ? 'var(--green)' : 'var(--amber)';
+
+    const list = document.getElementById('checkinList');
+    if(today.length===0){ list.innerHTML = '<p class="empty">No activity logged yet today.</p>'; return; }
+    list.innerHTML = today.map(e=>`
+      <div class="entry">
+        <img class="entry-thumb" src="${e.photo}">
+        <div class="entry-body">
+          <div class="entry-top"><span>${e.customer}</span><span class="entry-tag${e.isNew?' new':''}">${e.type}${e.isNew?' · New':''}</span></div>
+          <div class="entry-meta">${new Date(e.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}${e.coords ? ' · '+e.coords.lat.toFixed(3)+', '+e.coords.lng.toFixed(3) : ''}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  let qType = 'screenshot', qFileData=null, qFileName=null;
+  document.querySelectorAll('.toggle-btn[data-qtype]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggle-btn[data-qtype]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active'); qType = btn.dataset.qtype;
+      document.getElementById('qFileLabel').textContent = qType==='screenshot' ? 'Screenshot of quote' : 'Upload quotation document';
+      document.getElementById('qFile').accept = qType==='screenshot' ? 'image/*' : '.pdf,.doc,.docx,.xls,.xlsx,image/*';
+      qFileData=null; qFileName=null;
+      document.getElementById('qPreviewWrap').classList.add('hidden');
+      document.getElementById('qDocName').classList.add('hidden');
+    });
+  });
+  document.getElementById('qFile').addEventListener('change', e=>{
+    const f = e.target.files[0]; if(!f) return;
+    qFileName = f.name;
+    if(f.type.startsWith('image/')){
+      const reader = new FileReader();
+      reader.onload = ev=>{ qFileData = ev.target.result; document.getElementById('qPreview').src=qFileData; document.getElementById('qPreviewWrap').classList.remove('hidden'); document.getElementById('qDocName').classList.add('hidden'); };
+      reader.readAsDataURL(f);
+    } else {
+      qFileData = null;
+      document.getElementById('qDocName').querySelector('span').textContent = f.name;
+      document.getElementById('qDocName').classList.remove('hidden');
+      document.getElementById('qPreviewWrap').classList.add('hidden');
+    }
+  });
+  document.getElementById('quoteForm').addEventListener('submit', e=>{
+    e.preventDefault();
+    if(!qFileName){ alert('Please attach a screenshot or quotation document.'); return; }
+    const entries = load('quotes', []);
+    const qEntry = { id: Date.now(), customer: document.getElementById('qCustomer').value || '(unnamed customer)', qtype:qType, fileName:qFileName, preview:qFileData, ts:new Date().toISOString() };
+    entries.unshift(qEntry);
+    save('quotes', entries);
+    syncToSheet({type:'quote', ts:qEntry.ts, customer:qEntry.customer, qtype:qEntry.qtype, fileName:qEntry.fileName, photo:qEntry.preview});
+    document.getElementById('quoteForm').reset();
+    qFileData=null; qFileName=null;
+    document.getElementById('qPreviewWrap').classList.add('hidden');
+    document.getElementById('qDocName').classList.add('hidden');
+    renderQuotes();
+  });
+  function renderQuotes(){
+    const entries = load('quotes', []);
+    const list = document.getElementById('quoteList');
+    if(entries.length===0){ list.innerHTML='<p class="empty">No quotations submitted yet.</p>'; return; }
+    list.innerHTML = entries.map(e=>`
+      <div class="entry">
+        ${e.preview ? `<img class="entry-thumb" src="${e.preview}">` : `<div class="entry-icon"><i data-lucide="file-text"></i></div>`}
+        <div class="entry-body">
+          <div class="entry-top"><span>${e.customer}</span><span class="entry-tag">${e.qtype==='screenshot'?'Screenshot':'Document'}</span></div>
+          <div class="entry-meta">${e.fileName} · ${new Date(e.ts).toLocaleDateString()}</div>
+        </div>
+      </div>`).join('');
+    lucide.createIcons();
+  }
+
+  document.getElementById('orderForm').addEventListener('submit', e=>{
+    e.preventDefault();
+    const chosen = [...document.querySelectorAll('.class-chip.selected')].map(c=>c.dataset.class);
+    if(chosen.length===0){ alert('Please select at least one item class.'); return; }
+    const entries = load('orders', []);
+    const oEntry = { id:Date.now(), customer: document.getElementById('oCustomer').value || '(unnamed customer)', classes: chosen, notes: document.getElementById('oNotes').value, ts:new Date().toISOString() };
+    entries.unshift(oEntry);
+    save('orders', entries);
+    syncToSheet({type:'order', ts:oEntry.ts, customer:oEntry.customer, classes:oEntry.classes, notes:oEntry.notes});
+    document.getElementById('orderForm').reset();
+    document.querySelectorAll('.class-chip.selected').forEach(c=>c.classList.remove('selected'));
+    renderOrders();
+  });
+  function renderOrders(){
+    const entries = load('orders', []);
+    const list = document.getElementById('orderList');
+    if(entries.length===0){ list.innerHTML='<p class="empty">No orders placed yet.</p>'; return; }
+    list.innerHTML = entries.map(e=>`
+      <div class="entry">
+        <div class="entry-icon"><i data-lucide="shopping-cart"></i></div>
+        <div class="entry-body">
+          <div class="entry-top"><span>${e.customer}</span><span class="entry-meta">${new Date(e.ts).toLocaleDateString()}</span></div>
+          <div class="entry-classes">${e.classes.map(c=>`<span class="mini-chip">${c}</span>`).join('')}</div>
+          ${e.notes ? `<div class="entry-notes">${e.notes}</div>` : ''}
+        </div>
+      </div>`).join('');
+    lucide.createIcons();
+  }
+
+  let tracking = false, watchId = null;
+  document.getElementById('trailToggle').addEventListener('click', ()=>{
+    tracking = !tracking;
+    const btn = document.getElementById('trailToggle');
+    if(tracking){
+      btn.innerHTML = '<i data-lucide="square"></i><span>Stop tracking</span>';
+      if(navigator.geolocation){
+        watchId = navigator.geolocation.watchPosition(pos=>{
+          const pts = load('trail', []);
+          const tp = {lat:pos.coords.latitude, lng:pos.coords.longitude, ts:new Date().toISOString(), label:null};
+          pts.push(tp);
+          save('trail', pts.slice(-200));
+          syncToSheet({type:'trail', ts:tp.ts, lat:tp.lat, lng:tp.lng, label:''});
+          renderTrail();
+        }, ()=>{}, {enableHighAccuracy:true, maximumAge:15000});
+      }
+    } else {
+      btn.innerHTML = '<i data-lucide="play"></i><span>Start tracking</span>';
+      if(watchId!==null && navigator.geolocation){ navigator.geolocation.clearWatch(watchId); watchId=null; }
+    }
+    lucide.createIcons();
+  });
+
+  function renderTrail(){
+    let pts = load('trail', []).filter(p=>p.ts.slice(0,10)===todayKey());
+    const checkins = load('checkins', []).filter(e=> e.ts.slice(0,10)===todayKey() && e.coords);
+    checkins.forEach(c=> pts.push({lat:c.coords.lat, lng:c.coords.lng, ts:c.ts, label:c.customer}));
+    pts.sort((a,b)=> a.ts.localeCompare(b.ts));
+
+    const svg = document.getElementById('trailSvg');
+    const empty = document.getElementById('trailEmpty');
+    if(pts.length===0){ svg.innerHTML=''; empty.classList.remove('hidden'); document.getElementById('trailList').innerHTML=''; return; }
+    empty.classList.add('hidden');
+
+    const lats = pts.map(p=>p.lat), lngs = pts.map(p=>p.lng);
+    const minLat=Math.min(...lats), maxLat=Math.max(...lats), minLng=Math.min(...lngs), maxLng=Math.max(...lngs);
+    const pad=30, w=300,h=220;
+    const xy = p=>{
+      const x = maxLng===minLng ? w/2 : pad + (p.lng-minLng)/(maxLng-minLng)*(w-2*pad);
+      const y = maxLat===minLat ? h/2 : h-pad - (p.lat-minLat)/(maxLat-minLat)*(h-2*pad);
+      return [x,y];
+    };
+    let path = pts.map(xy).map(([x,y],i)=> (i===0?'M':'L')+x.toFixed(1)+','+y.toFixed(1)).join(' ');
+    let dots = pts.map((p,i)=>{
+      const [x,y]=xy(p);
+      const r = p.label ? 6 : 3;
+      const fill = p.label ? 'var(--brand)' : 'var(--muted)';
+      return `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="#fff" stroke-width="1.5"/>`;
+    }).join('');
+    svg.innerHTML = `<path d="${path}" fill="none" stroke="var(--brand)" stroke-width="2" stroke-dasharray="4 3" opacity="0.6"/>${dots}`;
+
+    document.getElementById('trailList').innerHTML = pts.filter(p=>p.label).map(p=>`
+      <div class="entry">
+        <div class="entry-icon"><i data-lucide="map-pin"></i></div>
+        <div class="entry-body">
+          <div class="entry-top"><span>${p.label}</span><span class="entry-meta">${new Date(p.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></div>
+        </div>
+      </div>`).join('');
+    lucide.createIcons();
+  }
+
+  function drawChart(svgId, data, target){
+    const svg = document.getElementById(svgId);
+    const w=320,h=190, padL=34, padB=28, padT=10, padR=8;
+    const chartW = w-padL-padR, chartH = h-padT-padB;
+    const keys = Object.keys(data);
+    const maxVal = Math.max(target*1.3, ...Object.values(data)) * 1.05;
+    const bw = chartW/keys.length*0.6;
+    const gap = chartW/keys.length;
+    let bars='', labels='', vals='';
+    keys.forEach((k,i)=>{
+      const v = data[k];
+      const x = padL + gap*i + (gap-bw)/2;
+      const barH = (v/maxVal)*chartH;
+      const y = padT+chartH-barH;
+      const meets = v>=target;
+      bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${barH.toFixed(1)}" rx="3" fill="${meets?'var(--green)':'var(--red)'}"/>`;
+      vals += `<text x="${(x+bw/2).toFixed(1)}" y="${(y-5).toFixed(1)}" font-size="9" font-weight="700" text-anchor="middle" fill="var(--ink)">${v.toFixed(1)}%</text>`;
+      labels += `<text x="${(x+bw/2).toFixed(1)}" y="${h-8}" font-size="9" font-weight="700" text-anchor="middle" fill="var(--muted)">${k}</text>`;
+    });
+    const targetY = padT+chartH-(target/maxVal)*chartH;
+    const gridline = `<line x1="${padL}" y1="${targetY.toFixed(1)}" x2="${w-padR}" y2="${targetY.toFixed(1)}" stroke="var(--amber)" stroke-width="1.3" stroke-dasharray="4 3"/><text x="${w-padR}" y="${(targetY-4).toFixed(1)}" font-size="8.5" font-weight="700" text-anchor="end" fill="var(--amber)">target ${target}%</text>`;
+    const axis = `<line x1="${padL}" y1="${padT+chartH}" x2="${w-padR}" y2="${padT+chartH}" stroke="var(--line)" stroke-width="1"/>`;
+    svg.innerHTML = axis + gridline + bars + vals + labels;
+  }
+  function renderCharts(){
+    drawChart('coreChart', CREDIT_DATA.core, 10);
+    drawChart('noncoreChart', CREDIT_DATA.noncore, 30);
+  }
+
+  function renderAll(){ renderCheckins(); renderQuotes(); renderOrders(); renderTrail(); renderCharts(); }
+  renderAll();
+  lucide.createIcons();
+})();
+</script>
+
+</body>
+</html>
